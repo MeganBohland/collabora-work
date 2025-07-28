@@ -1,0 +1,178 @@
+# Copyright 2021 Rustici Software
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+version: "3.8"
+services:
+
+#Moodle services
+
+  nginx:
+    image: "registry1.dso.mil/ironbank/opensource/nginx/nginx:1.25.2"
+    container_name: nginx
+    depends_on:
+      - moodle
+      - collabora
+    restart: unless-stopped
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx-conf/nginx.conf:/etc/nginx/nginx.conf
+      - moodle_www-data:/var/www/html
+      - ./nginx-certs:/etc/nginx/certs
+    networks:
+      - platform
+      
+  collabora:
+    image: collabora/code
+    container_name: collabora
+    restart: always
+    cap_add:
+      - MKNOD
+    ports:
+      - "9980:9980"
+    environment:
+      - domain=\\127\\.0\\.0\\.1|localhost|nginx
+      - username=admin
+      - password=secret
+    command: >
+      --o:ssl.enable=false
+      --o:ssl.termination=true
+      --o:server_name=localhost
+      --o:net.proxy_prefix=/loleaflet
+      --o:net.service_root=/hosting/discovery
+    volumes:
+      - ./collabora/online/loolwsd.xml:/etc/loolwsd/loolwsd.xml:ro
+    networks:
+      - platform
+
+  db:
+    image: "registry1.dso.mil/ironbank/opensource/postgres/postgresql:13.6"
+    restart: always
+    environment:
+      POSTGRES_USER: "moodle"
+      POSTGRES_PASSWORD: "${MOODLE_DB_PASSWORD:?err}"
+      POSTGRES_DB: "moodle"
+    networks:
+      - platform
+    volumes:
+      - moodle_db-data:/var/lib/postgresql/data
+      
+  moodle:
+    build:
+      context: ./moodle
+    restart: always
+    container_name: moodle
+    environment:
+      MOODLE_DOCKER_WEB_HOST: "moodle"
+      PGHOST: "db"
+      PG_DATABASE: "moodle"
+      PGUSER: ${MOODLE_DB_USER:-postgres}
+      PGPASSWORD: "${MOODLE_DB_PASSWORD:?err}"
+      PGPORT: ${MOODLE_DB_PORT:-5432}
+      MOODLE_DB_TYPE: "${MOODLE_DB_TYPE:-pgsql}"
+      MOODLE_SITE_LONG_NAME: "${MOODLE_SITE_LONG_NAME:?err}"
+      MOODLE_SITE_SHORT_NAME: "${MOODLE_SITE_SHORT_NAME:?err}"
+      MOODLE_URL_SCHEME: "${MOODLE_URL_SCHEME:-http}"
+      MOODLE_HOST: "${MOODLE_HOST:?err}"
+      MOODLE_JWT_ASSIGN_RANDOM_PASSWORD: true
+      MOODLE_JWT_ASSIGN_RANDOM_PASSWORD_PROPERTY_FIRST: "sub"
+      MOODLE_JWT_ASSIGN_RANDOM_PASSWORD_PROPERTY_SECOND: "nonce"
+      #PG_USER: "${MOODLE_ADMIN_USERNAME:?err}"
+      #PGPASSWORD: "${MOODLE_ADMIN_PASSWORD:?err}"
+      MOODLE_ADMIN_EMAIL: "${MOODLE_ADMIN_EMAIL:?err}"
+      MOODLE_JWT_CHECK_ISSUER: true
+      MOODLE_JWT_ISSUER: "https://auth.dev.daas.teambespin.us/auth/realms/ADL"
+      MOODLE_JWT_EDIPI_PROPERTY: "usercertificate"
+    networks:
+      - platform
+    volumes:
+      - moodle_www-data:/var/www/html
+      - moodle_moodle-data:/var/www/moodledata
+      - ./config.php:/var/www/html/config.php
+#      - ./php.ini:/usr/local/lib/php.ini
+    depends_on:
+      - db
+      
+  webservice:
+    restart: unless-stopped
+    build: .
+    image: catapult:player
+    ports:
+      - ${HOST_PORT}:63398
+    depends_on:
+      - rdbms
+    volumes:
+      - ./service/index.js:/usr/src/app/index.js:ro
+      - ./service/knexfile.js:/usr/src/app/knexfile.js:ro
+      - ./service/plugins:/usr/src/app/plugins:ro
+      - ./service/lib:/usr/src/app/lib:ro
+      - ./migrations:/usr/src/app/migrations:ro
+      - ./seeds:/usr/src/app/seeds:ro
+    environment:
+      - CONTENT_URL
+      - API_KEY
+      - API_SECRET
+      - TOKEN_SECRET
+      - LRS_ENDPOINT
+      - LRS_USERNAME
+      - LRS_PASSWORD
+      - LRS_XAPI_VERSIONs
+      - DB_HOST
+      - DB_NAME
+      - DB_USERNAME
+      - DB_PASSWORD
+      # - DATABASE_USER=catapult
+      # - DATABASE_USER_PASSWORD=quartz
+      # - DATABASE_NAME=catapult_player
+      - FIRST_TENANT_NAME
+      - PLAYER_API_ROOT
+      - PLAYER_STANDALONE_LAUNCH_URL_BASE
+      - HOST_PORT
+    networks:
+      - platform
+  rdbms:
+    image: mysql:8.0.31
+    networks:
+      - platform
+    volumes:
+      - catapult-player-data:/var/lib/mysql
+    environment:
+      - MYSQL_RANDOM_ROOT_PASSWORD=yes
+      - MYSQL_USER=catapult
+      - MYSQL_PASSWORD=quartz
+      - MYSQL_DATABASE=catapult_player
+    command: [
+      "mysqld",
+
+      # provide for full UTF-8 support
+      "--character-set-server=utf8mb4",
+      "--collation-server=utf8mb4_unicode_ci",
+
+      # need the following because the mysql.js client lib doesn't yet support
+      # the newer default scheme used in MySQL 8.x
+      "--default-authentication-plugin=mysql_native_password"
+    ]
+#for moodle
+networks:
+  platform:
+    driver: bridge
+
+volumes:
+#new moodle stuff
+  moodle_db-data:
+    driver: local
+  moodle_www-data:
+    driver: local
+  moodle_moodle-data:
+    driver: local
+  catapult-player-data:

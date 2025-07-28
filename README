@@ -1,0 +1,5 @@
+This requires you to pull the Partybus Moodle repo: https://code.il2.dso.mil/adl-ousd/moodle/moodle
+
+Also you need to make an env file. See example.env for an example.
+
+This will override the local config to turn some features on for development/testing

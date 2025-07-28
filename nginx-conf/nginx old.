@@ -1,0 +1,149 @@
+worker_processes  auto;
+
+pid        /var/cache/nginx/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+
+    proxy_read_timeout 750;
+    proxy_connect_timeout 750;
+    proxy_send_timeout 750;
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/access.log error;
+
+    include mime.types;
+
+    # Collabora reverse proxy over HTTPS
+    server {
+        listen 443 ssl;
+        server_name localhost;
+
+        ssl_certificate     /etc/nginx/certs/cert.pem;
+        ssl_certificate_key /etc/nginx/certs/key.pem;
+
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_ciphers         HIGH:!aNULL:!MD5;
+
+        location ^~ /loleaflet {
+            proxy_pass https://collabora:9980;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_verify off;
+        }
+
+        location ^~ /hosting {
+            proxy_pass https://collabora:9980;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_verify off;
+        }
+
+        location ^~ /browser {
+            proxy_pass https://collabora:9980;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_verify off;
+        }
+
+        location ^~ /cool {
+            proxy_pass https://collabora:9980;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_verify off;
+        }
+
+        location / {
+            proxy_pass http://moodle:80;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+    server {
+        listen 80;
+        listen [::]:80;
+
+        gzip on;
+        gzip_min_length  500;
+        gzip_proxied     any;
+        gzip_comp_level 4;
+        gzip_types  text/css text/javascript text/xml text/plain text/x-component application/javascript application/json application/xml application/rss+xml font/truetype font/opentype application/vnd.ms-fontobject image/svg+xml;
+        gzip_vary on;
+
+        index index.php index.html index.htm;
+
+        root /var/www/html;
+
+        location ~ [^/]\.php(/|$) {
+            fastcgi_split_path_info  ^(.+\.php)(/.+)$;
+            fastcgi_index            index.php;
+            fastcgi_pass             moodle:9000;
+            fastcgi_read_timeout     120;
+            fastcgi_send_timeout     120;
+            fastcgi_connect_timeout  120;
+            include                  fastcgi_params;
+
+            fastcgi_param   HTTP_AUTHORIZATION  $http_authorization;
+            proxy_set_header HTTP_AUTHORIZATION $http_authorization;
+            fastcgi_pass_request_headers on;
+            
+            fastcgi_param   PATH_INFO           $fastcgi_path_info;
+            fastcgi_param   SCRIPT_FILENAME     $document_root$fastcgi_script_name;
+
+            client_max_body_size 2G;
+        }
+
+        # Hide all dot files but allow "Well-Known URIs" as per RFC 5785
+        location ~ /\.(?!well-known).* {
+            return 404;
+        }
+        
+        # This should be after the php fpm rule and very close to the last nginx ruleset.
+        # Don't allow direct access to various internal files. See MDL-69333
+        location ~ (/vendor/|/node_modules/|composer\.json|/readme|/README|readme\.txt|/upgrade\.txt|db/install\.xml|/fixtures/|/behat/|phpunit\.xml|\.lock|environment\.xml) {
+            deny all;
+            return 404;
+        }
+
+        # # X-Accel-Redirect
+        # location /dataroot/ {
+        #     # Do not allow people to mess with this location directly
+        #     # Only internal redirects are allowed
+        #     internal;
+        # 
+        #     # Do not touch local disks when proxying
+        #     # content to clients
+        #     proxy_max_temp_file_size 0;
+        # 
+        #     # Download the file and send it to client
+        #     #
+        #     # ensure the path ends with /
+        #     proxy_pass 127.0.0.1:9000/dataroot/;
+        # }
+
+        location /dataroot/ {
+            internal;
+        
+            # ensure the path ends with /
+            alias /var/www/moodledata/; 
+        }
+
+        # Locally-hosted libraries to avoid public CDNs
+        location /cdn/ {
+            alias /usr/share/nginx/cdn/; 
+        }
+    }
+}

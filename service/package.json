@@ -1,0 +1,54 @@
+{
+  "name": "catapult-player-service",
+  "version": "1.0.0",
+  "description": "Web service implementing a cmi5 launching system to be integrated with an LMS",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adlnet/CATAPULT.git"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "mocha ./tests/**/*.spec.js"
+  },
+  "config": {
+    "port": "3398"
+  },
+  "nodemonConfig": {
+    "watch": [
+      "./index.js",
+      "lib/",
+      "node_modules/"
+    ]
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@cmi5/requirements": "^1.0.0",
+    "@hapi/basic": "^6.0.0",
+    "@hapi/boom": "^9.1.3",
+    "@hapi/h2o2": "^9.1.0",
+    "@hapi/hapi": "^20.1.5",
+    "@hapi/hoek": "^9.2.0",
+    "@hapi/inert": "^6.0.3",
+    "@hapi/jwt": "^2.0.1",
+    "@hapi/vision": "^6.1.0",
+    "@hapi/wreck": "^17.1.0",
+    "axios": "^1.7.1",
+    "hapi-swagger": "15.0.0",
+    "iri": "^1.3.0",
+    "iso8601-duration": "^1.3.0",
+    "joi": "^17.4.1",
+    "knex": "^0.95.7",
+    "knex-stringcase": "^1.4.5",
+    "libxmljs": "^0.19.8",
+    "mysql": "^2.18.1",
+    "node-stream-zip": "^1.13.6",
+    "uuid": "^9.0.1",
+    "wait-port": "^0.2.9",
+    "xml-sanitizer": "^2.0.1"
+  },
+  "devDependencies": {
+    "chai": "^4",
+    "dotenv": "^16.4.5",
+    "mocha": "^10.4.0"
+  }
+}
